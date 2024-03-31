@@ -39,11 +39,13 @@ f128 f128_fromF64(double x);
 double f128_toF64(f128 x);
 
 bool f128_isNaN(f128 x);
-f128 f128_mult(f128 x,f128 y);
 f128 f128_add(f128 x,f128 y);
 f128 f128_sub(f128 x,f128 y);
+f128 f128_mult(f128 x,f128 y);
+f128 f128_inv(f128 x);
+f128 f128_div(f128 x,f128 y);
 
-int f128_normalizeMantissa(f128* x);
+static int f128_normalizeMantissa(f128* x);
 
 #define F64_SIGN_FLAG  0x8000000000000000ull
 #define F64_EXP_SHIFT 52
@@ -105,7 +107,7 @@ bool f128_isNaN(f128 x){
   return (x.hi&F128_HI_MANTISSA_MASK)|x.low;
 }
 
-int f128_normalizeMantissa(f128* x){
+static int f128_normalizeMantissa(f128* x){
   if(((x->hi>>F128_HI_EXP_SHIFT)&F128_EXP_MASK)!=0)
     return 0;//already normalized
   x->hi&=F128_HI_MANTISSA_MASK;// set sign bit to zero
@@ -147,176 +149,6 @@ int f128_normalizeMantissa(f128* x){
   }
   x->low<<=shift;
   return baseShift+shift;
-}
-
-f128 f128_mult(f128 x,f128 y){
-  uint64_t sign=(x.hi&F128_HI_SIGN_FLAG)^(y.hi&F128_HI_SIGN_FLAG);
-  int32_t expX=(x.hi>>F128_HI_EXP_SHIFT)&F128_EXP_MASK;
-  int32_t expY=(y.hi>>F128_HI_EXP_SHIFT)&F128_EXP_MASK;
-  if(expX==F128_EXP_MASK){//x infinity and NaN
-    if(f128_isNaN(x)||f128_isNaN(y)||((y.hi|y.low)==0)){
-      // NaN*y, x*NaN, Infinity*0 -> NaN
-      return (f128){.hi=sign|F128_NAN_HI,.low=F128_NAN_LOW};
-    }
-    // Infinity*y -> Infinity
-    return (f128){.hi=sign|F128_INF_HI,.low=F128_INF_LOW};
-  }else if(expY==F128_EXP_MASK){//y infinity or NaN
-    if(f128_isNaN(y)||((x.hi|x.low)==0)){ // x is Finite by first if
-      // x*NaN, +*Infinity -> NaN
-      return (f128){.hi=sign|F128_NAN_HI,.low=F128_NAN_LOW};
-    }
-    // x*Infinity -> Infinity
-    return (f128){.hi=sign|F128_INF_HI,.low=F128_INF_LOW};
-  }
-  x.hi&=F128_HI_MANTISSA_MASK;
-  y.hi&=F128_HI_MANTISSA_MASK;
-  if(expX==0){
-    if((x.hi|x.low)==0){// 0*y -> 0
-      return (f128){.hi=sign,.low=0};
-    }
-    expX=1;// exponent 0 uses same power as exponent 1
-    expX-=f128_normalizeMantissa(&x);
-  }
-  if(expY==0){
-    if((y.hi|y.low)==0){// x*0 -> 0
-      return (f128){.hi=sign,.low=0};
-    }
-    expY=1;// exponent 0 uses same power as exponent 1
-    expY-=f128_normalizeMantissa(&y);
-  }
-  // multiply 113 bit mantissas
-  uint64_t a = (x.hi|F128_HI_HIDDEN_BIT) >> 32;
-  uint64_t b = (x.hi) & I32_MASK;
-  uint64_t c = (x.low >> 32) & I32_MASK;
-  uint64_t d = (x.low) & I32_MASK;
-  uint64_t e = (y.hi|F128_HI_HIDDEN_BIT) >> 32;
-  uint64_t f = (y.hi) & I32_MASK;;
-  uint64_t g = (y.low >> 32) & I32_MASK;
-  uint64_t h = (y.low) & I32_MASK;
-  uint64_t low=0,mid=0,hi=0,tmp;
-  int nz=0, leading;// low bits are not zero
-  // have to calculate all digits to get correct rounding
-  // offset 0: dh
-  tmp=d*h;
-  low+=tmp & I32_MASK;
-  mid+=tmp>>32;
-  // shift result by 32
-  nz+=(low & I32_MASK)!=0;
-  mid+=low>>32;
-  low=mid;mid=0;
-  // offset 32: ch dg
-  tmp=c*h;
-  low+=tmp & I32_MASK;
-  mid+=tmp>>32;
-  tmp=d*g;
-  low+=tmp & I32_MASK;
-  mid+=tmp>>32;
-  // shift result by 32
-  nz+=(low & I32_MASK)!=0;
-  mid+=low>>32;
-  low=mid;mid=0;
-  // offset 64: bh cg df
-  tmp=b*h;
-  low+=tmp & I32_MASK;
-  mid+=tmp>>32;
-  tmp=c*g;
-  low+=tmp & I32_MASK;
-  mid+=tmp>>32;
-  tmp=d*f;
-  low+=tmp & I32_MASK;
-  mid+=tmp>>32;
-  // shift result by 32
-  nz+=(low & I32_MASK)!=0;
-  mid+=low>>32;
-  low=mid;mid=0;
-  // offset 96: ah bg cf de
-  tmp=a*h;
-  low+=tmp & I32_MASK;
-  mid+=tmp>>32;
-  tmp=b*g;
-  low+=tmp & I32_MASK;
-  mid+=tmp>>32;
-  tmp=c*f;
-  low+=tmp & I32_MASK;
-  mid+=tmp>>32;
-  tmp=d*e;
-  low+=tmp & I32_MASK;
-  mid+=tmp>>32;
-  // shift result by 16
-  nz+=(low & I16_MASK)!=0;
-  leading=(low & I16_HI_BIT)!=0;//next bit after number
-  low=(low>>16)+((mid & I16_MASK)<<16);
-  mid>>=16;
-  // offset 128: ag bf ce
-  tmp=a*g;
-  low+=(tmp & I16_MASK)<<16;
-  mid+=tmp>>16;
-  tmp=b*f;
-  low+=(tmp & I16_MASK)<<16;
-  mid+=tmp>>16;
-  tmp=c*e;
-  low+=(tmp & I16_MASK)<<16;
-  mid+=tmp>>16;
-  // offset 160: af be
-  tmp=a*f;
-  mid+=(tmp & I16_MASK)<<16;
-  hi+=tmp>>16;
-  tmp=b*e;
-  mid+=(tmp & I16_MASK)<<16;
-  hi+=tmp>>16;
-  // offset 192: ae
-  hi+=(a*e)<<16;// a,e<2^17 -> ae < 2^34
-  // merge numbers to one 128-bit number in hi:low
-  mid+=(low>>32) & I32_MASK;
-  low=(low & I32_MASK)|((mid & I32_MASK)<<32);
-  hi+=(mid>>32) & I32_MASK;
-  // truncate number to 112 bits
-  tmp = hi >> 48; // should be between 1 and 4 (inclusive)
-  int shift = tmp==1 ? 0 : tmp < 4 ? 1 : 2 ;
-  if( tmp >> shift != 1 ){
-    fprintf(stderr,"unexpected value for hi bits %"PRIu64"\n",tmp);
-  }
-  if(shift!=0){
-    leading=(low>>(shift-1))&1;
-  }
-  if(leading&&(nz||((low>>shift)&1)==1)){
-    // round up if next bit 1 and remainder >0.5 or remainder ==0.5 and number odd
-    low++;
-    if(low==0){// overflow
-      hi++;
-      if(hi>(1ull<<(shift+1))){
-        shift++;
-      }
-    }
-  }
-  low >>=shift;
-  if(shift!=0){
-    low |= hi<<(64-shift);
-  }
-  hi =(hi>>shift) & F128_HI_MANTISSA_MASK;
-  // sum contains bias twice -> compensate for extra bias
-  int32_t exp=expX+expY+shift-F128_EXP_BIAS;
-  if(exp>=(int64_t)F128_EXP_MASK){ // overflow
-    exp=F128_EXP_MASK;
-    hi=low=0;
-  }else if(exp<1){ // underflow
-    hi|=F128_HI_HIDDEN_BIT;
-    // 1 for hidden bit,+ 1 for every power of two below 0
-    int32_t shift=1-exp;
-    exp=0;
-    // subnormal
-    if(shift>112){
-      hi=low=0;
-    }else if(shift>=64){
-      low=hi>>(shift-64);
-      hi=0;
-    }else{
-      low=(low>>shift)|(hi<<(64-shift));
-      hi>>=shift;
-    }
-  }
-  // update exponent & sign
-  return (f128){.hi=sign|(((uint64_t)exp)<<F128_HI_EXP_SHIFT)|hi,.low=low};
 }
 
 f128 f128_add(f128 x,f128 y){
@@ -538,6 +370,177 @@ f128 f128_sub(f128 x,f128 y){
   x.hi&=F128_HI_MANTISSA_MASK;
   x.hi|=sign|(exp<<F128_HI_EXP_SHIFT);
   return x;
+}
+
+
+f128 f128_mult(f128 x,f128 y){
+  uint64_t sign=(x.hi&F128_HI_SIGN_FLAG)^(y.hi&F128_HI_SIGN_FLAG);
+  int32_t expX=(x.hi>>F128_HI_EXP_SHIFT)&F128_EXP_MASK;
+  int32_t expY=(y.hi>>F128_HI_EXP_SHIFT)&F128_EXP_MASK;
+  if(expX==F128_EXP_MASK){//x infinity and NaN
+    if(f128_isNaN(x)||f128_isNaN(y)||((y.hi|y.low)==0)){
+      // NaN*y, x*NaN, Infinity*0 -> NaN
+      return (f128){.hi=sign|F128_NAN_HI,.low=F128_NAN_LOW};
+    }
+    // Infinity*y -> Infinity
+    return (f128){.hi=sign|F128_INF_HI,.low=F128_INF_LOW};
+  }else if(expY==F128_EXP_MASK){//y infinity or NaN
+    if(f128_isNaN(y)||((x.hi|x.low)==0)){ // x is Finite by first if
+      // x*NaN, +*Infinity -> NaN
+      return (f128){.hi=sign|F128_NAN_HI,.low=F128_NAN_LOW};
+    }
+    // x*Infinity -> Infinity
+    return (f128){.hi=sign|F128_INF_HI,.low=F128_INF_LOW};
+  }
+  x.hi&=F128_HI_MANTISSA_MASK;
+  y.hi&=F128_HI_MANTISSA_MASK;
+  if(expX==0){
+    if((x.hi|x.low)==0){// 0*y -> 0
+      return (f128){.hi=sign,.low=0};
+    }
+    expX=1;// exponent 0 uses same power as exponent 1
+    expX-=f128_normalizeMantissa(&x);
+  }
+  if(expY==0){
+    if((y.hi|y.low)==0){// x*0 -> 0
+      return (f128){.hi=sign,.low=0};
+    }
+    expY=1;// exponent 0 uses same power as exponent 1
+    expY-=f128_normalizeMantissa(&y);
+  }
+  // multiply 113 bit mantissas
+  uint64_t a = (x.hi|F128_HI_HIDDEN_BIT) >> 32;
+  uint64_t b = (x.hi) & I32_MASK;
+  uint64_t c = (x.low >> 32) & I32_MASK;
+  uint64_t d = (x.low) & I32_MASK;
+  uint64_t e = (y.hi|F128_HI_HIDDEN_BIT) >> 32;
+  uint64_t f = (y.hi) & I32_MASK;;
+  uint64_t g = (y.low >> 32) & I32_MASK;
+  uint64_t h = (y.low) & I32_MASK;
+  uint64_t low=0,mid=0,hi=0,tmp;
+  int nz=0, leading;// low bits are not zero
+  // have to calculate all digits to get correct rounding
+  // offset 0: dh
+  tmp=d*h;
+  low+=tmp & I32_MASK;
+  mid+=tmp>>32;
+  // shift result by 32
+  nz+=(low & I32_MASK)!=0;
+  mid+=low>>32;
+  low=mid;mid=0;
+  // offset 32: ch dg
+  tmp=c*h;
+  low+=tmp & I32_MASK;
+  mid+=tmp>>32;
+  tmp=d*g;
+  low+=tmp & I32_MASK;
+  mid+=tmp>>32;
+  // shift result by 32
+  nz+=(low & I32_MASK)!=0;
+  mid+=low>>32;
+  low=mid;mid=0;
+  // offset 64: bh cg df
+  tmp=b*h;
+  low+=tmp & I32_MASK;
+  mid+=tmp>>32;
+  tmp=c*g;
+  low+=tmp & I32_MASK;
+  mid+=tmp>>32;
+  tmp=d*f;
+  low+=tmp & I32_MASK;
+  mid+=tmp>>32;
+  // shift result by 32
+  nz+=(low & I32_MASK)!=0;
+  mid+=low>>32;
+  low=mid;mid=0;
+  // offset 96: ah bg cf de
+  tmp=a*h;
+  low+=tmp & I32_MASK;
+  mid+=tmp>>32;
+  tmp=b*g;
+  low+=tmp & I32_MASK;
+  mid+=tmp>>32;
+  tmp=c*f;
+  low+=tmp & I32_MASK;
+  mid+=tmp>>32;
+  tmp=d*e;
+  low+=tmp & I32_MASK;
+  mid+=tmp>>32;
+  // shift result by 16
+  nz+=(low & I16_MASK)!=0;
+  leading=(low & I16_HI_BIT)!=0;//next bit after number
+  low=(low>>16)+((mid & I16_MASK)<<16);
+  mid>>=16;
+  // offset 128: ag bf ce
+  tmp=a*g;
+  low+=(tmp & I16_MASK)<<16;
+  mid+=tmp>>16;
+  tmp=b*f;
+  low+=(tmp & I16_MASK)<<16;
+  mid+=tmp>>16;
+  tmp=c*e;
+  low+=(tmp & I16_MASK)<<16;
+  mid+=tmp>>16;
+  // offset 160: af be
+  tmp=a*f;
+  mid+=(tmp & I16_MASK)<<16;
+  hi+=tmp>>16;
+  tmp=b*e;
+  mid+=(tmp & I16_MASK)<<16;
+  hi+=tmp>>16;
+  // offset 192: ae
+  hi+=(a*e)<<16;// a,e<2^17 -> ae < 2^34
+  // merge numbers to one 128-bit number in hi:low
+  mid+=(low>>32) & I32_MASK;
+  low=(low & I32_MASK)|((mid & I32_MASK)<<32);
+  hi+=(mid>>32) & I32_MASK;
+  // truncate number to 112 bits
+  tmp = hi >> 48; // should be between 1 and 4 (inclusive)
+  int shift = tmp==1 ? 0 : tmp < 4 ? 1 : 2 ;
+  if( tmp >> shift != 1 ){
+    fprintf(stderr,"unexpected value for hi bits %"PRIu64"\n",tmp);
+  }
+  if(shift!=0){
+    leading=(low>>(shift-1))&1;
+  }
+  if(leading&&(nz||((low>>shift)&1)==1)){
+    // round up if next bit 1 and remainder >0.5 or remainder ==0.5 and number odd
+    low++;
+    if(low==0){// overflow
+      hi++;
+      if(hi>(1ull<<(shift+1))){
+        shift++;
+      }
+    }
+  }
+  low >>=shift;
+  if(shift!=0){
+    low |= hi<<(64-shift);
+  }
+  hi =(hi>>shift) & F128_HI_MANTISSA_MASK;
+  // sum contains bias twice -> compensate for extra bias
+  int32_t exp=expX+expY+shift-F128_EXP_BIAS;
+  if(exp>=(int64_t)F128_EXP_MASK){ // overflow
+    exp=F128_EXP_MASK;
+    hi=low=0;
+  }else if(exp<1){ // underflow
+    hi|=F128_HI_HIDDEN_BIT;
+    // 1 for hidden bit,+ 1 for every power of two below 0
+    int32_t shift=1-exp;
+    exp=0;
+    // subnormal
+    if(shift>112){
+      hi=low=0;
+    }else if(shift>=64){
+      low=hi>>(shift-64);
+      hi=0;
+    }else{
+      low=(low>>shift)|(hi<<(64-shift));
+      hi>>=shift;
+    }
+  }
+  // update exponent & sign
+  return (f128){.hi=sign|(((uint64_t)exp)<<F128_HI_EXP_SHIFT)|hi,.low=low};
 }
 
 #define MIN_INVERTABLE_HI 0x400000000000

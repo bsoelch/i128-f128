@@ -13,17 +13,29 @@ typedef struct{
   uint64_t low;
 }i128;
 
+i128 i128_not(i128);
+i128 i128_and(i128,i128);
+i128 i128_or(i128,i128);
+i128 i128_xor(i128,i128);
+i128 i128_leftShift(i128,unsigned int);
+i128 i128_logicalRightShift(i128,unsigned int);
+uint64_t i64_arithmeticRightShift(uint64_t,unsigned int);
+i128 i128_arithmeticRightShift(i128,unsigned int);
+int i64_highestSetBit(uint64_t);
+int i128_highestSetBit(i128);
+int i128_unsignedCompare(i128,i128);
+i128 i128_negate(i128);
+i128 i128_add(i128,i128);
+i128 i128_sub(i128,i128);
+i128 i64_bigMult(uint64_t,uint64_t);
+i128 i128_mult(i128,i128);
+i128 i128_unsignedDivMod(i128,i128,i128*);
+i128 i128_divMod(i128,i128,i128*);
 
 i128 i128_not(i128 a){
   return (i128){
     .low=~a.low,
     .hi=~a.hi
-  };
-}
-i128 i128_twosComplement(i128 a){
-  return (i128){
-    .low=-a.low,
-    .hi=~a.hi+(a.low==0)
   };
 }
 i128 i128_and(i128 a,i128 b){
@@ -76,7 +88,7 @@ i128 i128_logicalRightShift(i128 a,unsigned int k){
     .hi=a.hi>>k
   };
 }
-uint64_t i64_ashr(uint64_t a,unsigned int k){
+uint64_t i64_arithmeticRightShift(uint64_t a,unsigned int k){
   return (a>>k)|((!!(a&I64_HI_BIT))*(I64_MAX<<(64-k)));
 }
 // arithmetic right shift
@@ -84,7 +96,7 @@ i128 i128_arithmeticRightShift(i128 a,unsigned int k){
   k&=127;
   if(k>=64){
     return (i128){
-      .low=i64_ashr(a.hi,k-64),
+      .low=i64_arithmeticRightShift(a.hi,k-64),
       .hi=I64_MAX
     };
   }else if(k==0){
@@ -92,55 +104,10 @@ i128 i128_arithmeticRightShift(i128 a,unsigned int k){
   }
   return (i128){
     .low=(a.low>>k) |(a.hi<<(64-k)),
-    .hi=i64_ashr(a.hi,k)
+    .hi=i64_arithmeticRightShift(a.hi,k)
   };
 }
 
-
-i128 i128_add(i128 a,i128 b){
-  return (i128){
-    .low=a.low+b.low,
-    .hi=a.hi+b.hi+!!((a.low&I64_HI_BIT)&(b.low&I64_HI_BIT))
-  };
-}
-i128 i128_sub(i128 a,i128 b){
-  return (i128){
-    .low=a.low-b.low,
-    .hi=a.hi-b.hi+(a.low<b.low)
-  };
-}
-
-int i128_unsignedCompare(i128 a,i128 b){
-  if(a.hi<b.hi)
-    return -1;
-  if(a.hi>b.hi)
-    return 1;
-  return (a.low<b.low)?-1:(a.hi>b.hi)?1:0;
-}
-
-i128 i64_bigMult(uint64_t a,uint64_t b){
-  uint64_t aLow=a&I32_MASK;
-  uint64_t aHi=a>>32;
-  uint64_t bLow=b&I32_MASK;
-  uint64_t bHi=b>>32;
-  uint64_t x00=aLow*bLow;
-  uint64_t x01=aLow*bHi;
-  uint64_t x10=aHi*bLow;
-  uint64_t x11=aHi*bHi;
-  uint64_t carry=((x00>>32)+(x01&I32_MASK)+(x10&I32_MASK))>>32;
-  return (i128){
-    .low=x00+((x01+x10)<<32),
-    .hi=x11+((x01+x10)>>32)+carry
-  };
-}
-i128 i128_mult(i128 a,i128 b){
-  // (a+b*2^64) (c+d*2^64) = a*c+2^64*(a*d+b*c)+2^128*(b*d)
-  i128 x00=i64_bigMult(a.low,b.low);
-  return (i128){
-    .low=x00.low,
-    .hi=x00.hi+a.low*b.hi+a.hi*b.low
-  };
-}
 #define POW2_32 1ull<<32
 #define POW2_16 1<<16
 #define POW2_8  1<<8
@@ -179,6 +146,58 @@ int i128_highestSetBit(i128 x){
   if(x.hi==0)
     return i64_highestSetBit(x.low);
   return i64_highestSetBit(x.hi)+64;
+}
+
+int i128_unsignedCompare(i128 a,i128 b){
+  if(a.hi<b.hi)
+    return -1;
+  if(a.hi>b.hi)
+    return 1;
+  return (a.low<b.low)?-1:(a.hi>b.hi)?1:0;
+}
+
+i128 i128_negate(i128 a){
+  return (i128){
+    .low=-a.low,
+    .hi=~a.hi+(a.low==0)
+  };
+}
+
+i128 i128_add(i128 a,i128 b){
+  return (i128){
+    .low=a.low+b.low,
+    .hi=a.hi+b.hi+!!((a.low&I64_HI_BIT)&(b.low&I64_HI_BIT))
+  };
+}
+i128 i128_sub(i128 a,i128 b){
+  return (i128){
+    .low=a.low-b.low,
+    .hi=a.hi-b.hi+(a.low<b.low)
+  };
+}
+
+i128 i64_bigMult(uint64_t a,uint64_t b){
+  uint64_t aLow=a&I32_MASK;
+  uint64_t aHi=a>>32;
+  uint64_t bLow=b&I32_MASK;
+  uint64_t bHi=b>>32;
+  uint64_t x00=aLow*bLow;
+  uint64_t x01=aLow*bHi;
+  uint64_t x10=aHi*bLow;
+  uint64_t x11=aHi*bHi;
+  uint64_t carry=((x00>>32)+(x01&I32_MASK)+(x10&I32_MASK))>>32;
+  return (i128){
+    .low=x00+((x01+x10)<<32),
+    .hi=x11+((x01+x10)>>32)+carry
+  };
+}
+i128 i128_mult(i128 a,i128 b){
+  // (a+b*2^64) (c+d*2^64) = a*c+2^64*(a*d+b*c)+2^128*(b*d)
+  i128 x00=i64_bigMult(a.low,b.low);
+  return (i128){
+    .low=x00.low,
+    .hi=x00.hi+a.low*b.hi+a.hi*b.low
+  };
 }
 
 i128 i128_unsignedDivMod(i128 a,i128 b,i128* mod){
@@ -229,20 +248,20 @@ i128 i128_unsignedDivMod(i128 a,i128 b,i128* mod){
 i128 i128_divMod(i128 a,i128 b,i128* mod){
   bool resSign=false,modSign=false;
   if(a.hi&I64_HI_BIT){
-    a=i128_twosComplement(a);
+    a=i128_negate(a);
     resSign=!resSign;
     modSign=true;
   }
   if(b.hi&I64_HI_BIT){
-    b=i128_twosComplement(b);
+    b=i128_negate(b);
     resSign=!resSign;
   }
   i128 res=i128_unsignedDivMod(a,b,mod);
   if(resSign){
-    res=i128_twosComplement(res);
+    res=i128_negate(res);
   }
   if(modSign&&mod!=NULL){
-    *mod=i128_twosComplement(*mod);
+    *mod=i128_negate(*mod);
   }
   return res;
 }
