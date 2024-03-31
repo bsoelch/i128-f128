@@ -35,17 +35,18 @@ typedef struct{
 // [sign:1][exp:15][mantissa:112]
 
 // declarations of functions used before initialization
-f128 f128_fromF64(double x);
-double f128_toF64(f128 x);
+f128 f128_fromF64(double);
+double f128_toF64(f128);
 
-bool f128_isNaN(f128 x);
-f128 f128_add(f128 x,f128 y);
-f128 f128_sub(f128 x,f128 y);
-f128 f128_mult(f128 x,f128 y);
-f128 f128_inv(f128 x);
-f128 f128_div(f128 x,f128 y);
+bool f128_isNaN(f128);
+int f128_compare(f128,f128);
+f128 f128_add(f128,f128);
+f128 f128_sub(f128,f128);
+f128 f128_mult(f128,f128);
+f128 f128_inv(f128);
+f128 f128_div(f128,f128);
 
-static int f128_normalizeMantissa(f128* x);
+static int f128_normalizeMantissa(f128*);
 
 #define F64_SIGN_FLAG  0x8000000000000000ull
 #define F64_EXP_SHIFT 52
@@ -106,6 +107,23 @@ bool f128_isNaN(f128 x){
     return false;
   return (x.hi&F128_HI_MANTISSA_MASK)|x.low;
 }
+
+int f128_compare(f128 x,f128 y){
+  if((x.hi&F128_HI_SIGN_FLAG)!=(y.hi&F128_HI_SIGN_FLAG)){
+    // different signs
+    return (x.hi&F128_HI_SIGN_FLAG)?-1:1;
+  }
+  int sign=(x.hi&F128_HI_SIGN_FLAG)?-1:1;
+  if(f128_isNaN(x)&&f128_isNaN(y))
+    return 0; // treat all NaNs as equal
+  uint64_t xHi=x.hi&(~F128_HI_SIGN_FLAG);
+  uint64_t yHi=y.hi&(~F128_HI_SIGN_FLAG);
+  if(xHi!=yHi){
+    return xHi<yHi?-sign:sign;
+  }
+  return (x.low<y.low)?-sign:(x.low>y.low)?sign:0;
+}
+// XXX separate functions for operators to satisfy rules for Nan and zero
 
 static int f128_normalizeMantissa(f128* x){
   if(((x->hi>>F128_HI_EXP_SHIFT)&F128_EXP_MASK)!=0)

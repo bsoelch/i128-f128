@@ -24,6 +24,7 @@ i128 i128_arithmeticRightShift(i128,unsigned int);
 int i64_highestSetBit(uint64_t);
 int i128_highestSetBit(i128);
 int i128_unsignedCompare(i128,i128);
+int i128_compare(i128,i128);
 i128 i128_negate(i128);
 i128 i128_add(i128,i128);
 i128 i128_sub(i128,i128);
@@ -154,6 +155,13 @@ int i128_unsignedCompare(i128 a,i128 b){
   if(a.hi>b.hi)
     return 1;
   return (a.low<b.low)?-1:(a.hi>b.hi)?1:0;
+}
+int i128_compare(i128 a,i128 b){
+  if((a.hi&I64_HI_BIT)==(b.hi&I64_HI_BIT)){
+    // same sign
+    return i128_unsignedCompare(a,b);
+  }
+  return (a.hi&I64_HI_BIT)? -1 : 1;
 }
 
 i128 i128_negate(i128 a){

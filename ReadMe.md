@@ -19,7 +19,8 @@ functions:
 * `i128_arithmeticRightShift` shift bits right by given amount, sign extends
 * `i64_highestSetBit` get position of highest 1 bit
 * `i128_highestSetBit` get position of highest 1 bit
-* `i128_unsignedCompare` negation
+* `i128_unsignedCompare` unsigned comparison
+* `i128_compare` signed comparison
 * `i128_negate` negation
 * `i128_add` addition
 * `i128_sub` subtraction
@@ -38,6 +39,7 @@ functions:
 * `f128_fromF64` convert `double` to `f128` ( assumes IEEE 64-bit double )
 * `f128_toF64` convert `f128` to `double` ( assumes IEEE 64-bit double )
 * `f128_isNaN` checks if number is NaN
+* `f128_compare` comparison
 * `f128_add` addition
 * `f128_sub` subtraction
 * `f128_mult` multiplication
