@@ -525,6 +525,41 @@ f128 f128_sub(f128 x,f128 y){
   return x;
 }
 
+/*
+uses Newton-Raphson-Division (https://en.wikipedia.org/wiki/Division_algorithm#Newton%E2%80%93Raphson_division)
+*/
+f128 f128_inv(f128 x){
+  uint64_t sign=x.hi&HI_SIGN_FLAG;
+  int32_t expX=(x.hi>>HI_EXP_SHIFT)&EXP_MASK;
+  if(expX==EXP_MASK){
+    // TODO non-finite numbers
+  }else if(expX==0){
+    // TODO subnormal numbers
+  }
+  // scale x such that 0.5 <= x < 1
+  x.hi=(x.hi&HI_MANTISSA_MASK)|((EXP_BIAS-1)<<HI_EXP_SHIFT);
+  // TODO precompute constants in f128 precission
+  f128 p=f128_fromF64(48/17.0);
+  f128 q=f128_fromF64(32/17.0);
+  f128 two=f128_fromF64(2);
+  // estimate 1/x as 48/17 - 32/17 * x
+  f128 y=f128_sub(p,f128_mult(x,q));
+  // iteration step: y2 = y1(2 - x * y1)
+  // 5 iteration steps should be enough
+  y = f128_mult(y,f128_sub(two,f128_mult(x,y)));
+  y = f128_mult(y,f128_sub(two,f128_mult(x,y)));
+  y = f128_mult(y,f128_sub(two,f128_mult(x,y)));
+  y = f128_mult(y,f128_sub(two,f128_mult(x,y)));
+  y = f128_mult(y,f128_sub(two,f128_mult(x,y)));
+  // TODO check if exponent can over/underflow
+  // rescale result
+  int32_t expY=(y.hi>>HI_EXP_SHIFT)&EXP_MASK;
+  expY+=EXP_BIAS-1-expX;
+  y.hi&=(HI_MANTISSA_MASK);
+  y.hi|=sign|((((uint64_t)expY)&EXP_MASK)<<HI_EXP_SHIFT);
+  return y;
+}
+
 // TODO  div
 
 int main(void){
@@ -567,6 +602,10 @@ int main(void){
   c=f128_sub(b,a);
   printf("%016lx %016lx\n",c.hi,c.low);
   printf("%f\n",f128_toF64(c));
+  c=f128_inv(a);
+  printf("%016lx %016lx\n",a.hi,a.low);
+  printf("%016lx %016lx\n",c.hi,c.low);
+  printf("%.12f\n",f128_toF64(c));
 }
 
 
