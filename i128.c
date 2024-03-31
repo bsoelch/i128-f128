@@ -5,110 +5,112 @@
 #include <inttypes.h>
 
 #define I64_HI_BIT 0x8000000000000000ull
+#define I32_MASK 0xffffffffull
+#define I64_MAX 0xffffffffffffffffull
 
 typedef struct{
   uint64_t hi;
   uint64_t low;
-}I128;
+}i128;
 
 
-I128 I128_NOT(I128 a){
-  return (I128){
+i128 i128_not(i128 a){
+  return (i128){
     .low=~a.low,
     .hi=~a.hi
   };
 }
-I128 I128_TWOS_COMPLEMENT(I128 a){
-  return (I128){
+i128 i128_twosComplement(i128 a){
+  return (i128){
     .low=-a.low,
     .hi=~a.hi+(a.low==0)
   };
 }
-I128 I128_AND(I128 a,I128 b){
-  return (I128){
+i128 i128_and(i128 a,i128 b){
+  return (i128){
     .low=a.low&b.low,
     .hi=a.hi&b.hi
   };
 }
-I128 I128_OR(I128 a,I128 b){
-  return (I128){
+i128 i128_or(i128 a,i128 b){
+  return (i128){
     .low=a.low|b.low,
     .hi=a.hi|b.hi
   };
 }
-I128 I128_XOR(I128 a,I128 b){
-  return (I128){
+i128 i128_xor(i128 a,i128 b){
+  return (i128){
     .low=a.low^b.low,
     .hi=a.hi^b.hi
   };
 }
 
-I128 I128_LSHIFT(I128 a,unsigned int k){
+i128 i128_leftShift(i128 a,unsigned int k){
   k&=127;
   if(k>=64){
-    return (I128){
+    return (i128){
       .low=0,
       .hi=a.low<<(k-64)
     };
   }else if(k==0){
     return a;
   }
-  return (I128){
+  return (i128){
     .low=a.low<<k,
     .hi=(a.hi<<k)|(a.low >> (64-k))
   };
 }
 // logical right shift
-I128 I128_LRSHIFT(I128 a,unsigned int k){
+i128 i128_logicalRightShift(i128 a,unsigned int k){
   k&=127;
   if(k>=64){
-    return (I128){
+    return (i128){
       .low=a.hi>>(k-64),
       .hi=0
     };
   }else if(k==0){
     return a;
   }
-  return (I128){
+  return (i128){
     .low=(a.low>>k) |(a.hi<<(64-k)),
     .hi=a.hi>>k
   };
 }
 uint64_t i64_ashr(uint64_t a,unsigned int k){
-  return (a>>k)|((!!(a&I64_HI_BIT))*(0xffffffffffffffffull<<(64-k)));
+  return (a>>k)|((!!(a&I64_HI_BIT))*(I64_MAX<<(64-k)));
 }
 // arithmetic right shift
-I128 I128_ARSHIFT(I128 a,unsigned int k){
+i128 i128_arithmeticRightShift(i128 a,unsigned int k){
   k&=127;
   if(k>=64){
-    return (I128){
+    return (i128){
       .low=i64_ashr(a.hi,k-64),
-      .hi=0xffffffffffffffffull
+      .hi=I64_MAX
     };
   }else if(k==0){
     return a;
   }
-  return (I128){
+  return (i128){
     .low=(a.low>>k) |(a.hi<<(64-k)),
     .hi=i64_ashr(a.hi,k)
   };
 }
 
 
-I128 I128_ADD(I128 a,I128 b){
-  return (I128){
+i128 i128_add(i128 a,i128 b){
+  return (i128){
     .low=a.low+b.low,
     .hi=a.hi+b.hi+!!((a.low&I64_HI_BIT)&(b.low&I64_HI_BIT))
   };
 }
-I128 I128_SUBT(I128 a,I128 b){
-  return (I128){
+i128 i128_sub(i128 a,i128 b){
+  return (i128){
     .low=a.low-b.low,
     .hi=a.hi-b.hi+(a.low<b.low)
   };
 }
 
-int I128_UCMP(I128 a,I128 b){
+int i128_unsignedCompare(i128 a,i128 b){
   if(a.hi<b.hi)
     return -1;
   if(a.hi>b.hi)
@@ -116,26 +118,25 @@ int I128_UCMP(I128 a,I128 b){
   return (a.low<b.low)?-1:(a.hi>b.hi)?1:0;
 }
 
-#define U32_MASK 0xffffffff
-I128 I64_BIG_MULT(uint64_t a,uint64_t b){
-  uint64_t aLow=a&U32_MASK;
+i128 i64_bigMult(uint64_t a,uint64_t b){
+  uint64_t aLow=a&I32_MASK;
   uint64_t aHi=a>>32;
-  uint64_t bLow=b&U32_MASK;
+  uint64_t bLow=b&I32_MASK;
   uint64_t bHi=b>>32;
   uint64_t x00=aLow*bLow;
   uint64_t x01=aLow*bHi;
   uint64_t x10=aHi*bLow;
   uint64_t x11=aHi*bHi;
-  uint64_t carry=((x00>>32)+(x01&U32_MASK)+(x10&U32_MASK))>>32;
-  return (I128){
+  uint64_t carry=((x00>>32)+(x01&I32_MASK)+(x10&I32_MASK))>>32;
+  return (i128){
     .low=x00+((x01+x10)<<32),
     .hi=x11+((x01+x10)>>32)+carry
   };
 }
-I128 I128_MULT(I128 a,I128 b){
+i128 i128_mult(i128 a,i128 b){
   // (a+b*2^64) (c+d*2^64) = a*c+2^64*(a*d+b*c)+2^128*(b*d)
-  I128 x00=I64_BIG_MULT(a.low,b.low);
-  return (I128){
+  i128 x00=i64_bigMult(a.low,b.low);
+  return (i128){
     .low=x00.low,
     .hi=x00.hi+a.low*b.hi+a.hi*b.low
   };
@@ -146,7 +147,7 @@ I128 I128_MULT(I128 a,I128 b){
 #define POW2_4  1<<4
 #define POW2_2  1<<2
 #define POW2_1  1<<1
-int I64_BIT_COUNT(uint64_t x){
+int i64_highestSetBit(uint64_t x){
   int res=0;
   if(x>POW2_32){
     res+=32;
@@ -174,50 +175,50 @@ int I64_BIT_COUNT(uint64_t x){
   }
   return res+x;
 }
-int I128_BIT_COUNT(I128 x){
+int i128_highestSetBit(i128 x){
   if(x.hi==0)
-    return I64_BIT_COUNT(x.low);
-  return I64_BIT_COUNT(x.hi)+64;
+    return i64_highestSetBit(x.low);
+  return i64_highestSetBit(x.hi)+64;
 }
-//I128 DIV UDIV, MOD,UMOD
-I128 I128_UDIVMOD(I128 a,I128 b,I128* mod){
+
+i128 i128_unsignedDivMod(i128 a,i128 b,i128* mod){
   if((a.hi<b.hi)||((a.hi==b.hi) && (a.low<=b.low))){ // a <= b
     if(mod!=NULL){
       *mod=a;
     }
-    return (I128){
+    return (i128){
       .hi=0,
       .low=0
     };
   }
   if(a.hi==0){ // both fit in 64 bits
     if(mod!=NULL){
-      *mod=(I128){
+      *mod=(i128){
         .hi=0,
         .low=a.low%b.low
       };
     }
-    return (I128){
+    return (i128){
       .hi=0,
       .low=a.low/b.low
     };
   }
   // TODO handle more special cases ( b.hi=0,b.low=0,b=2^k, ... )
-  int shift=I128_BIT_COUNT(a)-I128_BIT_COUNT(b);
-  I128 bit={.hi=0,.low=0},res={.hi=0,.low=0};
-  I128 div=I128_LSHIFT(b,shift);
+  int shift=i128_highestSetBit(a)-i128_highestSetBit(b);
+  i128 bit={.hi=0,.low=0},res={.hi=0,.low=0};
+  i128 div=i128_leftShift(b,shift);
   if(shift>=64){
     bit.hi=1ull<<(shift-64);
   }else{
     bit.low=1ull<<shift;
   }
   while(bit.hi|bit.low){
-    if(I128_UCMP(a,div)>=0){
-      a = I128_SUBT(a,div);
-      res = I128_OR(res,bit);
+    if(i128_unsignedCompare(a,div)>=0){
+      a = i128_sub(a,div);
+      res = i128_or(res,bit);
     }
-    div=I128_LRSHIFT(div,1);
-    bit=I128_LRSHIFT(bit,1);
+    div=i128_logicalRightShift(div,1);
+    bit=i128_logicalRightShift(bit,1);
   }
   if(mod!=NULL){
     *mod=a;
@@ -225,50 +226,50 @@ I128 I128_UDIVMOD(I128 a,I128 b,I128* mod){
   return res;
 }
 // TODO check if signs are correct
-I128 I128_DIVMOD(I128 a,I128 b,I128* mod){
+i128 i128_divMod(i128 a,i128 b,i128* mod){
   bool resSign=false,modSign=false;
   if(a.hi&I64_HI_BIT){
-    a=I128_TWOS_COMPLEMENT(a);
+    a=i128_twosComplement(a);
     resSign=!resSign;
     modSign=true;
   }
   if(b.hi&I64_HI_BIT){
-    b=I128_TWOS_COMPLEMENT(b);
+    b=i128_twosComplement(b);
     resSign=!resSign;
   }
-  I128 res=I128_UDIVMOD(a,b,mod);
+  i128 res=i128_unsignedDivMod(a,b,mod);
   if(resSign){
-    res=I128_TWOS_COMPLEMENT(res);
+    res=i128_twosComplement(res);
   }
   if(modSign&&mod!=NULL){
-    *mod=I128_TWOS_COMPLEMENT(*mod);
+    *mod=i128_twosComplement(*mod);
   }
   return res;
 }
 
 int main(void){
-  I128 a={.hi=0x0123456789abcdef,.low=0xfedcba9876543210};
-  I128 b={.hi=0,.low=0x1111111111111111};
-  I128 m;
-  I128 c=I128_DIVMOD(a,b,&m);
+  i128 a={.hi=0x0123456789abcdef,.low=0xfedcba9876543210};
+  i128 b={.hi=0,.low=0x1111111111111111};
+  i128 m;
+  i128 c=i128_divMod(a,b,&m);
   printf("%016lx %016lx\n",a.hi,a.low);
   printf("%016lx %016lx\n",b.hi,b.low);
   printf("%016lx %016lx\n",c.hi,c.low);
   printf("%016lx %016lx\n",m.hi,m.low);
-  c=I128_MULT(b,c);
+  c=i128_mult(b,c);
   printf("%016lx %016lx\n",c.hi,c.low);
-  c=I128_ADD(c,m);
+  c=i128_add(c,m);
   printf("%016lx %016lx\n",c.hi,c.low);
-  a=(I128){.hi=0xffffffffffffffff,.low=0xffffffffffff0000};
-  b=(I128){.hi=0,.low=3};
-  c=I128_DIVMOD(a,b,&m);
+  a=(i128){.hi=0xffffffffffffffff,.low=0xffffffffffff0000};
+  b=(i128){.hi=0,.low=3};
+  c=i128_divMod(a,b,&m);
   printf("%016lx %016lx\n",a.hi,a.low);
   printf("%016lx %016lx\n",b.hi,b.low);
   printf("%016lx %016lx\n",c.hi,c.low);
   printf("%016lx %016lx\n",m.hi,m.low);
-  c=I128_MULT(b,c);
+  c=i128_mult(b,c);
   printf("%016lx %016lx\n",c.hi,c.low);
-  c=I128_ADD(c,m);
+  c=i128_add(c,m);
   printf("%016lx %016lx\n",c.hi,c.low);
 }
 
