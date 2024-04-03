@@ -180,7 +180,7 @@ i128 i128_add(i128 a,i128 b){
 i128 i128_sub(i128 a,i128 b){
   return (i128){
     .low=a.low-b.low,
-    .hi=a.hi-b.hi+(a.low<b.low)
+    .hi=a.hi-b.hi-(a.low<b.low)
   };
 }
 
@@ -275,10 +275,16 @@ i128 i128_divMod(i128 a,i128 b,i128* mod){
 }
 
 int main(void){
-  i128 a={.hi=0x0123456789abcdef,.low=0xfedcba9876543210};
-  i128 b={.hi=0,.low=0x1111111111111111};
+  i128 a={.hi=0x8000000000000000,.low=0};
+  i128 b={.hi=0,.low=1};
+  i128 c=i128_sub(a,b);
+  printf("%016lx %016lx\n",a.hi,a.low);
+  printf("%016lx %016lx\n",b.hi,b.low);
+  printf("%016lx %016lx\n",c.hi,c.low);
+  a=(i128){.hi=0x0123456789abcdef,.low=0xfedcba9876543210};
+  b=(i128){.hi=0,.low=0x1111111111111111};
   i128 m;
-  i128 c=i128_divMod(a,b,&m);
+  c=i128_divMod(a,b,&m);
   printf("%016lx %016lx\n",a.hi,a.low);
   printf("%016lx %016lx\n",b.hi,b.low);
   printf("%016lx %016lx\n",c.hi,c.low);
