@@ -98,7 +98,7 @@ i128 i128_arithmeticRightShift(i128 a,unsigned int k){
   if(k>=64){
     return (i128){
       .low=i64_arithmeticRightShift(a.hi,k-64),
-      .hi=I64_MAX
+      .hi=I64_MAX*(!!(a.hi&I64_HI_BIT))
     };
   }else if(k==0){
     return a;
@@ -172,9 +172,10 @@ i128 i128_negate(i128 a){
 }
 
 i128 i128_add(i128 a,i128 b){
+  uint64_t lowSum=a.low+b.low;
   return (i128){
-    .low=a.low+b.low,
-    .hi=a.hi+b.hi+!!((a.low&I64_HI_BIT)&(b.low&I64_HI_BIT))
+    .low=lowSum,
+    .hi=a.hi+b.hi+(lowSum<a.low)
   };
 }
 i128 i128_sub(i128 a,i128 b){

@@ -240,8 +240,9 @@ f128 f128_add(f128 x,f128 y){
       x.hi=x.hi>>shift;
     }
   }
-  x.hi+=y.hi+!!((x.low&I64_HI_BIT)&(y.low&I64_HI_BIT));
-  x.low+=y.low;
+  uint64_t lowSum=x.low+y.low;
+  x.hi+=y.hi+(lowSum<x.low);
+  x.low=lowSum;
   // overflow (at most by one bit)
   if(x.hi>(F128_HI_HIDDEN_BIT|F128_HI_MANTISSA_MASK)){
     nz|=nextBit;
