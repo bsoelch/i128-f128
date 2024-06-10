@@ -380,7 +380,7 @@ f128 f128_sub(f128 x,f128 y){
   }else{
     exp-=f128_normalizeMantissa(&x);
   }
-  if(exp<=0){
+  if(exp<=0){ // TODO fix handling of subnormal numbers
     exp=0;
     // undo last shift in normalization
     x.low=(x.low>>1)|(x.hi<<63);
@@ -397,14 +397,14 @@ f128 f128_mult(f128 x,f128 y){
   int32_t expX=(x.hi>>F128_HI_EXP_SHIFT)&F128_EXP_MASK;
   int32_t expY=(y.hi>>F128_HI_EXP_SHIFT)&F128_EXP_MASK;
   if(expX==F128_EXP_MASK){//x infinity and NaN
-    if(f128_isNaN(x)||f128_isNaN(y)||((y.hi|y.low)==0)){
+    if(f128_isNaN(x)||f128_isNaN(y)||(((y.hi&~F128_HI_SIGN_FLAG)|y.low)==0)){
       // NaN*y, x*NaN, Infinity*0 -> NaN
       return (f128){.hi=sign|F128_NAN_HI,.low=F128_NAN_LOW};
     }
     // Infinity*y -> Infinity
     return (f128){.hi=sign|F128_INF_HI,.low=F128_INF_LOW};
   }else if(expY==F128_EXP_MASK){//y infinity or NaN
-    if(f128_isNaN(y)||((x.hi|x.low)==0)){ // x is Finite by first if
+    if(f128_isNaN(y)||(((x.hi&~F128_HI_SIGN_FLAG)|x.low)==0)){ // x is Finite by first if
       // x*NaN, +*Infinity -> NaN
       return (f128){.hi=sign|F128_NAN_HI,.low=F128_NAN_LOW};
     }
